@@ -30,6 +30,14 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "discover":
+		configPath := envOr("PM_CONFIG_PATH", defaultConfigPath)
+		statePath := envOr("PM_STATE_PATH", defaultStatePath)
+		if err := cmd.RunDiscover(configPath, statePath); err != nil {
+			fmt.Fprintf(os.Stderr, "[pm-monitor] ERROR: %v\n", err)
+			os.Exit(1)
+		}
+
 	case "status":
 		statePath := envOr("PM_STATE_PATH", defaultStatePath)
 		if err := cmd.RunStatus(statePath); err != nil {
@@ -44,11 +52,12 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: pm-version-monitor <check|status>")
+	fmt.Fprintln(os.Stderr, "usage: pm-version-monitor <check|discover|status>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "commands:")
-	fmt.Fprintln(os.Stderr, "  check   poll all enabled PMs, notify new releases, update state")
-	fmt.Fprintln(os.Stderr, "  status  print current state table")
+	fmt.Fprintln(os.Stderr, "  check    poll all enabled PMs, notify new releases, update state")
+	fmt.Fprintln(os.Stderr, "  discover fetch all historical PM releases into state (bootstrap, run once)")
+	fmt.Fprintln(os.Stderr, "  status   print current state table")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "env vars:")
 	fmt.Fprintln(os.Stderr, "  PM_CONFIG_PATH   path to pm-versions-config.yml (default: .github/pm-versions-config.yml)")

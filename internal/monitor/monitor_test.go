@@ -21,6 +21,10 @@ func (s *stubSource) FetchReleases(sourceID, sinceVersion string) ([]sources.Rel
 	return s.releases, s.err
 }
 
+func (s *stubSource) FetchAll(sourceID, sinceDate string) ([]sources.Release, error) {
+	return s.releases, s.err
+}
+
 // stubNotifier records which notifications were sent.
 type stubNotifier struct {
 	sent []notify.Notification
