@@ -82,3 +82,7 @@ func (p *PyPISource) FetchReleases(sourceID, sinceVersion string) ([]Release, er
 func isPyPIPrerelease(v string) bool {
 	return pypiPreReleaseRe.MatchString(v)
 }
+
+func (p *PyPISource) FetchAll(sourceID, sinceDate string) ([]Release, error) {
+	return nil, fmt.Errorf("PyPISource.FetchAll: not yet implemented")
+}

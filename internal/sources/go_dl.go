@@ -75,3 +75,7 @@ func (g *GoDLSource) FetchReleases(sourceID, sinceVersion string) ([]Release, er
 	}
 	return releases, nil
 }
+
+func (g *GoDLSource) FetchAll(sourceID, sinceDate string) ([]Release, error) {
+	return nil, fmt.Errorf("GoDLSource.FetchAll: not yet implemented")
+}

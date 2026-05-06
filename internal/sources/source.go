@@ -15,6 +15,11 @@ type Source interface {
 	// FetchReleases returns all releases newer than sinceVersion.
 	// If sinceVersion is empty, returns all available releases.
 	FetchReleases(sourceID, sinceVersion string) ([]Release, error)
+
+	// FetchAll returns all releases published on or after sinceDate (format: "YYYY-MM-DD").
+	// If sinceDate is empty, returns all available releases regardless of date.
+	// Used by the discover command to seed historical version history.
+	FetchAll(sourceID, sinceDate string) ([]Release, error)
 }
 
 // For returns the Source implementation for the given source_type.

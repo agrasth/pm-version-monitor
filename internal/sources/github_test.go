@@ -81,3 +81,52 @@ func TestGitHubSourceHTTPError(t *testing.T) {
 		t.Error("expected error for HTTP 500, got nil")
 	}
 }
+
+func TestGitHubSourceFetchAll(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/github_releases_paginated.json")
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/repos/apache/maven/releases" {
+			t.Errorf("unexpected path: %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(fixture)
+	}))
+	defer srv.Close()
+
+	src := sources.NewGitHubSource(srv.URL)
+
+	// sinceDate "2023-01-01" should include maven-3.8.8 (2023-01-15) and newer but exclude maven-3.6.3 (2021)
+	releases, err := src.FetchAll("apache/maven", "2023-01-01")
+	if err != nil {
+		t.Fatalf("FetchAll error: %v", err)
+	}
+	if len(releases) != 3 {
+		t.Fatalf("expected 3 releases since 2023-01-01, got %d: %+v", len(releases), releases)
+	}
+
+	// Empty sinceDate should return all 4
+	all, err := src.FetchAll("apache/maven", "")
+	if err != nil {
+		t.Fatalf("FetchAll (no cutoff) error: %v", err)
+	}
+	if len(all) != 4 {
+		t.Fatalf("expected 4 releases with no cutoff, got %d", len(all))
+	}
+}
+
+func TestGitHubSourceFetchAllHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	src := sources.NewGitHubSource(srv.URL)
+	_, err := src.FetchAll("apache/maven", "2023-01-01")
+	if err == nil {
+		t.Error("expected error for HTTP 500, got nil")
+	}
+}

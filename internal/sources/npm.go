@@ -69,3 +69,7 @@ func (n *NpmSource) FetchReleases(sourceID, sinceVersion string) ([]Release, err
 	}
 	return releases, nil
 }
+
+func (n *NpmSource) FetchAll(sourceID, sinceDate string) ([]Release, error) {
+	return nil, fmt.Errorf("NpmSource.FetchAll: not yet implemented")
+}
