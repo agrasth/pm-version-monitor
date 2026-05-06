@@ -187,3 +187,60 @@ func TestPendingVersionsOlderThan(t *testing.T) {
 		t.Errorf("unexpected pending entry: %+v", pending[0])
 	}
 }
+
+func TestHasVersion(t *testing.T) {
+	s := &state.State{PMs: map[string]*state.PMState{
+		"maven": {
+			LatestKnown: "4.0.0-rc-1",
+			Versions: map[string]*state.VersionEntry{
+				"4.0.0-rc-1": {TestStatus: state.StatusPending},
+			},
+		},
+	}}
+
+	if !state.HasVersion(s, "maven", "4.0.0-rc-1") {
+		t.Error("HasVersion returned false for existing version")
+	}
+	if state.HasVersion(s, "maven", "3.9.9") {
+		t.Error("HasVersion returned true for non-existing version")
+	}
+	if state.HasVersion(s, "gradle", "9.0") {
+		t.Error("HasVersion returned true for non-existing PM")
+	}
+}
+
+func TestUpdateTestStatusWithJFCLI(t *testing.T) {
+	s := &state.State{PMs: map[string]*state.PMState{
+		"gradle": {
+			LatestKnown: "9.0-rc-1",
+			Versions: map[string]*state.VersionEntry{
+				"9.0-rc-1": {TestStatus: state.StatusPending},
+			},
+		},
+	}}
+
+	err := state.UpdateTestStatusWithJFCLI(s, "gradle", "9.0-rc-1", state.StatusFailed,
+		"https://github.com/run/2", "2.103.0")
+	if err != nil {
+		t.Fatalf("UpdateTestStatusWithJFCLI error: %v", err)
+	}
+	entry := s.PMs["gradle"].Versions["9.0-rc-1"]
+	if entry.JFCLIVersion != "2.103.0" {
+		t.Errorf("JFCLIVersion = %q, want 2.103.0", entry.JFCLIVersion)
+	}
+	if entry.TestStatus != state.StatusFailed {
+		t.Errorf("TestStatus = %q, want failed", entry.TestStatus)
+	}
+	if entry.RunURL != "https://github.com/run/2" {
+		t.Errorf("RunURL = %q, want https://github.com/run/2", entry.RunURL)
+	}
+}
+
+func TestJFCLIVersionEmptyByDefault(t *testing.T) {
+	s := &state.State{PMs: map[string]*state.PMState{}}
+	state.AddVersion(s, "maven", "4.0.0-M1", "milestone", "2026-05-01T00:00:00Z")
+	entry := s.PMs["maven"].Versions["4.0.0-M1"]
+	if entry.JFCLIVersion != "" {
+		t.Errorf("JFCLIVersion should be empty by default, got %q", entry.JFCLIVersion)
+	}
+}

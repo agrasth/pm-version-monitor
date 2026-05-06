@@ -28,12 +28,13 @@ type PMState struct {
 
 // VersionEntry records what we know about one specific release.
 type VersionEntry struct {
-	ReleaseType string `json:"release_type"`
-	DetectedAt  string `json:"detected_at"`
-	TestStatus  string `json:"test_status"` // pending | passed | failed
-	TestedAt    string `json:"tested_at,omitempty"`
-	RunURL      string `json:"run_url,omitempty"`
-	AnalysisURL string `json:"analysis_url,omitempty"`
+	ReleaseType  string `json:"release_type"`
+	DetectedAt   string `json:"detected_at"`
+	TestStatus   string `json:"test_status"` // pending | passed | failed
+	JFCLIVersion string `json:"jfcli_version,omitempty"`
+	TestedAt     string `json:"tested_at,omitempty"`
+	RunURL       string `json:"run_url,omitempty"`
+	AnalysisURL  string `json:"analysis_url,omitempty"`
 }
 
 // PendingVersion is a (PM, version) pair returned by PendingVersionsOlderThan.
@@ -125,6 +126,25 @@ func UpdateTestStatus(s *State, pm, version, status, runURL string) error {
 	entry.TestStatus = status
 	entry.RunURL = runURL
 	entry.TestedAt = time.Now().UTC().Format(time.RFC3339)
+	return nil
+}
+
+// HasVersion reports whether a specific version of a PM is already tracked in state.
+func HasVersion(s *State, pm, version string) bool {
+	p, ok := s.PMs[pm]
+	if !ok {
+		return false
+	}
+	_, exists := p.Versions[version]
+	return exists
+}
+
+// UpdateTestStatusWithJFCLI sets the test result and records which jfrog-cli version was used.
+func UpdateTestStatusWithJFCLI(s *State, pm, version, status, runURL, jfcliVersion string) error {
+	if err := UpdateTestStatus(s, pm, version, status, runURL); err != nil {
+		return err
+	}
+	s.PMs[pm].Versions[version].JFCLIVersion = jfcliVersion
 	return nil
 }
 
