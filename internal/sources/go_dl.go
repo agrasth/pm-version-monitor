@@ -76,6 +76,8 @@ func (g *GoDLSource) FetchReleases(sourceID, sinceVersion string) ([]Release, er
 	return releases, nil
 }
 
+// FetchAll returns all Go releases. sinceDate is intentionally ignored because the
+// go.dev/dl API does not include publication dates in its response.
 func (g *GoDLSource) FetchAll(sourceID, sinceDate string) ([]Release, error) {
-	return nil, fmt.Errorf("GoDLSource.FetchAll: not yet implemented")
+	return g.FetchReleases(sourceID, "")
 }

@@ -70,6 +70,52 @@ func (n *NpmSource) FetchReleases(sourceID, sinceVersion string) ([]Release, err
 	return releases, nil
 }
 
+// FetchAll returns all npm releases published on or after sinceDate ("YYYY-MM-DD").
+// If sinceDate is empty, returns all releases regardless of date.
 func (n *NpmSource) FetchAll(sourceID, sinceDate string) ([]Release, error) {
-	return nil, fmt.Errorf("NpmSource.FetchAll: not yet implemented")
+	var cutoff time.Time
+	if sinceDate != "" {
+		var err error
+		cutoff, err = time.Parse("2006-01-02", sinceDate)
+		if err != nil {
+			return nil, fmt.Errorf("parsing sinceDate %q: %w", sinceDate, err)
+		}
+	}
+
+	url := fmt.Sprintf("%s/%s", n.baseURL, sourceID)
+	resp, err := n.client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("fetching npm %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, fmt.Errorf("npm registry returned %d for %s", resp.StatusCode, url)
+	}
+
+	var raw npmResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decoding npm response: %w", err)
+	}
+
+	var releases []Release
+	for ver := range raw.Versions {
+		if !cutoff.IsZero() {
+			timeStr := raw.Time[ver]
+			if timeStr != "" {
+				publishedAt, err := time.Parse(time.RFC3339, timeStr)
+				if err == nil && publishedAt.Before(cutoff) {
+					continue
+				}
+			}
+		}
+		releases = append(releases, Release{
+			Version:         ver,
+			IsPrerelease:    strings.Contains(ver, "-"),
+			PublishedAt:     raw.Time[ver],
+			ReleaseNotesURL: fmt.Sprintf("https://www.npmjs.com/package/%s/v/%s", sourceID, ver),
+		})
+	}
+	return releases, nil
 }

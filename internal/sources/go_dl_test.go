@@ -37,3 +37,25 @@ func TestGoDLSourceInvalidSourceID(t *testing.T) {
 		t.Error("expected error for invalid sourceID, got nil")
 	}
 }
+
+func TestGoDLSourceFetchAll(t *testing.T) {
+	fixture, err := os.ReadFile("../../testdata/go_dl_response.json")
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(fixture)
+	}))
+	defer srv.Close()
+
+	src := sources.NewGoDLSourceWithBase(srv.URL)
+
+	// sinceDate is ignored for go.dev — all 3 releases should be returned
+	releases, err := src.FetchAll("go", "2020-01-01")
+	if err != nil {
+		t.Fatalf("FetchAll error: %v", err)
+	}
+	if len(releases) != 3 {
+		t.Fatalf("expected 3 releases (sinceDate ignored for go.dev), got %d", len(releases))
+	}
+}

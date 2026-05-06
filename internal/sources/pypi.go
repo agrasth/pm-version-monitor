@@ -83,6 +83,52 @@ func isPyPIPrerelease(v string) bool {
 	return pypiPreReleaseRe.MatchString(v)
 }
 
+// FetchAll returns all PyPI releases published on or after sinceDate ("YYYY-MM-DD").
+// If sinceDate is empty, returns all releases regardless of date.
 func (p *PyPISource) FetchAll(sourceID, sinceDate string) ([]Release, error) {
-	return nil, fmt.Errorf("PyPISource.FetchAll: not yet implemented")
+	var cutoff time.Time
+	if sinceDate != "" {
+		var err error
+		cutoff, err = time.Parse("2006-01-02", sinceDate)
+		if err != nil {
+			return nil, fmt.Errorf("parsing sinceDate %q: %w", sinceDate, err)
+		}
+	}
+
+	url := fmt.Sprintf("%s/pypi/%s/json", p.baseURL, sourceID)
+	resp, err := p.client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("fetching PyPI %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, fmt.Errorf("PyPI returned %d for %s", resp.StatusCode, url)
+	}
+
+	var raw pypiResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("decoding PyPI response: %w", err)
+	}
+
+	var releases []Release
+	for ver, files := range raw.Releases {
+		if len(files) == 0 {
+			continue
+		}
+		if !cutoff.IsZero() {
+			uploadTime, err := time.Parse("2006-01-02T15:04:05", files[0].UploadTime)
+			if err == nil && uploadTime.Before(cutoff) {
+				continue
+			}
+		}
+		releases = append(releases, Release{
+			Version:         ver,
+			IsPrerelease:    isPyPIPrerelease(ver),
+			PublishedAt:     files[0].UploadTime,
+			ReleaseNotesURL: fmt.Sprintf("https://pypi.org/project/%s/%s/", sourceID, ver),
+		})
+	}
+	return releases, nil
 }
