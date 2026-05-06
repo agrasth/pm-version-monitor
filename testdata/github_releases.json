@@ -1,0 +1,18 @@
+[
+  {
+    "tag_name": "maven-4.0.0-rc-1",
+    "name": "Apache Maven 4.0.0-rc-1",
+    "prerelease": true,
+    "published_at": "2026-05-01T10:00:00Z",
+    "html_url": "https://github.com/apache/maven/releases/tag/maven-4.0.0-rc-1",
+    "body": "Release notes for 4.0.0-rc-1"
+  },
+  {
+    "tag_name": "maven-3.9.9",
+    "name": "Apache Maven 3.9.9",
+    "prerelease": false,
+    "published_at": "2026-03-01T10:00:00Z",
+    "html_url": "https://github.com/apache/maven/releases/tag/maven-3.9.9",
+    "body": "Release notes for 3.9.9"
+  }
+]

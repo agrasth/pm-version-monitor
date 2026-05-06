@@ -1,0 +1,160 @@
+name: PM Compatibility Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      pm_name:
+        description: 'Package manager name (e.g. maven, npm, gradle)'
+        required: true
+      pm_version:
+        description: 'Version to test (e.g. 4.0.0-rc-1)'
+        required: true
+      slack_thread_ts:
+        description: 'Slack thread timestamp for reply (optional)'
+        required: false
+  repository_dispatch:
+    types: [run-pm-compatibility-test]
+
+jobs:
+  test:
+    name: Test ${{ github.event.inputs.pm_name || github.event.client_payload.pm_name }} ${{ github.event.inputs.pm_version || github.event.client_payload.pm_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    env:
+      PM_NAME:         ${{ github.event.inputs.pm_name    || github.event.client_payload.pm_name }}
+      PM_VERSION:      ${{ github.event.inputs.pm_version || github.event.client_payload.pm_version }}
+      SLACK_THREAD_TS: ${{ github.event.inputs.slack_thread_ts || github.event.client_payload.slack_thread_ts }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # ── Install the requested PM version ──────────────────────────────
+
+      - name: Install PM (PyPI-based)
+        if: contains('pip pipenv poetry conan', env.PM_NAME)
+        run: pip install "${{ env.PM_NAME }}==${{ env.PM_VERSION }}"
+
+      - name: Install PM (npm registry)
+        if: contains('npm pnpm', env.PM_NAME)
+        run: npm install -g "${{ env.PM_NAME }}@${{ env.PM_VERSION }}"
+
+      - name: Install PM (Yarn Berry)
+        if: env.PM_NAME == 'yarn'
+        run: npm install -g "yarn@${{ env.PM_VERSION }}"
+
+      - name: Install PM (Go)
+        if: env.PM_NAME == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.PM_VERSION }}
+
+      - name: Install PM (Maven)
+        if: env.PM_NAME == 'maven'
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: ${{ env.PM_VERSION }}
+
+      - name: Install PM (Gradle)
+        if: env.PM_NAME == 'gradle'
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.PM_VERSION }}
+
+      - name: Install PM (Helm)
+        if: env.PM_NAME == 'helm'
+        uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.PM_VERSION }}
+
+      # ── Run existing e2e tests for this PM ─────────────────────────────
+
+      - name: Run e2e tests
+        id: run_tests
+        continue-on-error: true
+        env:
+          JFROG_URL:          ${{ secrets.JFROG_TESTS_PLATFORM_URL }}
+          JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_TESTS_ACCESS_TOKEN }}
+        run: |
+          case "$PM_NAME" in
+            maven)   go test -v -run TestMaven   ./... 2>&1 | tee /tmp/test_output.txt ;;
+            gradle)  go test -v -run TestGradle  ./... 2>&1 | tee /tmp/test_output.txt ;;
+            npm)     go test -v -run TestNpm     ./... 2>&1 | tee /tmp/test_output.txt ;;
+            yarn)    go test -v -run TestYarn    ./... 2>&1 | tee /tmp/test_output.txt ;;
+            pnpm)    go test -v -run TestPnpm    ./... 2>&1 | tee /tmp/test_output.txt ;;
+            pip)     go test -v -run TestPip     ./... 2>&1 | tee /tmp/test_output.txt ;;
+            pipenv)  go test -v -run TestPipenv  ./... 2>&1 | tee /tmp/test_output.txt ;;
+            poetry)  go test -v -run TestPoetry  ./... 2>&1 | tee /tmp/test_output.txt ;;
+            uv)      go test -v -run TestUv      ./... 2>&1 | tee /tmp/test_output.txt ;;
+            conan)   go test -v -run TestConan   ./... 2>&1 | tee /tmp/test_output.txt ;;
+            go)      go test -v -run TestGo      ./... 2>&1 | tee /tmp/test_output.txt ;;
+            nuget)   go test -v -run TestNuget   ./... 2>&1 | tee /tmp/test_output.txt ;;
+            docker)  go test -v -run TestDocker  ./... 2>&1 | tee /tmp/test_output.txt ;;
+            helm)    go test -v -run TestHelm    ./... 2>&1 | tee /tmp/test_output.txt ;;
+            *)       echo "Unknown PM: $PM_NAME"; exit 1 ;;
+          esac
+
+      # ── Update state and post result to Slack ──────────────────────────
+
+      - name: Update state file
+        if: always()
+        run: |
+          STATUS="passed"
+          if [ "${{ steps.run_tests.outcome }}" != "success" ]; then
+            STATUS="failed"
+          fi
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          python3 - <<EOF
+          import json
+
+          with open('.github/pm-versions-state.json') as f:
+              data = json.load(f)
+
+          pm = "$PM_NAME"
+          version = "$PM_VERSION"
+          status = "$STATUS"
+          run_url = "$RUN_URL"
+
+          if pm in data.get('pms', {}) and version in data['pms'][pm].get('versions', {}):
+              data['pms'][pm]['versions'][version]['test_status'] = status
+              data['pms'][pm]['versions'][version]['run_url'] = run_url
+
+          with open('.github/pm-versions-state.json', 'w') as f:
+              json.dump(data, f, indent=2)
+
+          print(f"Updated state: {pm} {version} -> {status}")
+          EOF
+
+          git config user.name  "pm-version-monitor[bot]"
+          git config user.email "pm-version-monitor[bot]@users.noreply.github.com"
+          git add .github/pm-versions-state.json
+          git diff --cached --quiet || git commit -m "chore(pm-monitor): update test status for $PM_NAME $PM_VERSION [skip ci]"
+          git push || true
+
+      - name: Post result to Slack
+        if: always()
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        run: |
+          if [ "${{ steps.run_tests.outcome }}" = "success" ]; then
+            TEXT="✅ *$PM_NAME $PM_VERSION* — all tests passed   <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+          else
+            TEXT="❌ *$PM_NAME $PM_VERSION* — tests failed   <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+          fi
+
+          PAYLOAD="{\"channel\": \"#pm-releases\", \"text\": \"$TEXT\""
+          if [ -n "$SLACK_THREAD_TS" ]; then
+            PAYLOAD="${PAYLOAD}, \"thread_ts\": \"$SLACK_THREAD_TS\""
+          fi
+          PAYLOAD="${PAYLOAD}}"
+
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"

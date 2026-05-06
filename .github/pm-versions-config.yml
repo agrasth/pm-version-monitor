@@ -1,0 +1,91 @@
+settings:
+  auto_test_after_hours: 4
+  slack_channel: "#pm-releases"
+
+package_managers:
+  - name: npm
+    source_type: npm_registry
+    source_id: npm
+    notify_release_types: [alpha, beta, milestone, rc, ga]
+    enabled: true
+
+  - name: yarn
+    display_name: Yarn Berry
+    source_type: github_releases
+    source_id: yarnpkg/berry
+    notify_release_types: [beta, rc, ga]
+    enabled: true
+
+  - name: pnpm
+    source_type: npm_registry
+    source_id: pnpm
+    notify_release_types: [alpha, beta, milestone, rc, ga]
+    enabled: true
+
+  - name: maven
+    source_type: github_releases
+    source_id: apache/maven
+    notify_release_types: [milestone, rc, ga]
+    enabled: true
+
+  - name: gradle
+    source_type: github_releases
+    source_id: gradle/gradle
+    notify_release_types: [rc, ga]
+    enabled: true
+
+  - name: pip
+    source_type: pypi
+    source_id: pip
+    notify_release_types: [alpha, beta, rc, ga]
+    enabled: true
+
+  - name: pipenv
+    source_type: pypi
+    source_id: pipenv
+    notify_release_types: [beta, rc, ga]
+    enabled: true
+
+  - name: poetry
+    source_type: pypi
+    source_id: poetry
+    notify_release_types: [beta, rc, ga]
+    enabled: true
+
+  - name: uv
+    source_type: github_releases
+    source_id: astral-sh/uv
+    notify_release_types: [rc, ga]
+    enabled: true
+
+  - name: conan
+    source_type: github_releases
+    source_id: conan-io/conan
+    notify_release_types: [beta, rc, ga]
+    enabled: true
+
+  - name: go
+    source_type: go_dl
+    source_id: go
+    notify_release_types: [rc, ga]
+    enabled: true
+
+  - name: nuget
+    display_name: NuGet / .NET SDK
+    source_type: github_releases
+    source_id: dotnet/sdk
+    notify_release_types: [rc, ga]
+    enabled: true
+
+  - name: docker
+    display_name: Docker CLI
+    source_type: github_releases
+    source_id: docker/cli
+    notify_release_types: [rc, ga]
+    enabled: true
+
+  - name: helm
+    source_type: github_releases
+    source_id: helm/helm
+    notify_release_types: [alpha, beta, rc, ga]
+    enabled: true

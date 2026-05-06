@@ -1,0 +1,124 @@
+name: PM Version Monitor
+
+on:
+  schedule:
+    - cron: '0 6 * * *'    # nightly at 06:00 UTC
+  workflow_dispatch: {}     # allow manual trigger
+
+jobs:
+  check:
+    name: Detect new PM releases
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # needed to commit state file
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/pm-version-monitor/go.mod
+
+      - name: Build pm-version-monitor
+        run: go build -o /usr/local/bin/pm-version-monitor ./tools/pm-version-monitor
+
+      - name: Run check
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          GITHUB_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          PM_CONFIG_PATH:  .github/pm-versions-config.yml
+          PM_STATE_PATH:   .github/pm-versions-state.json
+        run: pm-version-monitor check
+
+      - name: Commit updated state
+        run: |
+          git config user.name  "pm-version-monitor[bot]"
+          git config user.email "pm-version-monitor[bot]@users.noreply.github.com"
+          git add .github/pm-versions-state.json
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "chore(pm-monitor): update version state [skip ci]"
+            git push
+          fi
+
+  auto-test-gate:
+    name: Auto-trigger tests for overdue pending versions
+    runs-on: ubuntu-latest
+    needs: check
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find overdue pending versions
+        id: find_pending
+        run: |
+          python3 - <<'EOF'
+          import json, datetime, sys, os
+
+          with open('.github/pm-versions-state.json') as f:
+              data = json.load(f)
+          with open('.github/pm-versions-config.yml') as f:
+              import re
+              m = re.search(r'auto_test_after_hours:\s*(\d+)', f.read())
+              hours = int(m.group(1)) if m else 4
+
+          cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours)
+          pending = []
+          for pm, pm_state in data.get('pms', {}).items():
+              for version, entry in pm_state.get('versions', {}).items():
+                  if entry.get('test_status') == 'pending':
+                      detected = datetime.datetime.fromisoformat(entry['detected_at'])
+                      if detected < cutoff:
+                          pending.append({'pm': pm, 'version': version})
+
+          if pending:
+              print(f"Found {len(pending)} overdue pending version(s): {pending}")
+              with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+                  f.write(f"pending={json.dumps(pending)}\n")
+          else:
+              print("No overdue pending versions.")
+          EOF
+
+      - name: Trigger compatibility tests
+        if: steps.find_pending.outputs.pending != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo '${{ steps.find_pending.outputs.pending }}' | python3 - <<'EOF'
+          import json, subprocess, sys
+
+          pending = json.loads('${{ steps.find_pending.outputs.pending }}')
+          for item in pending:
+              cmd = [
+                  'gh', 'workflow', 'run', 'pm-compatibility-test.yml',
+                  '-f', f"pm_name={item['pm']}",
+                  '-f', f"pm_version={item['version']}",
+              ]
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              if result.returncode != 0:
+                  print(f"WARN: failed to trigger test for {item['pm']} {item['version']}: {result.stderr}")
+              else:
+                  print(f"Triggered test for {item['pm']} {item['version']}")
+          EOF
+
+  notify-failure:
+    name: Notify Slack on workflow failure
+    runs-on: ubuntu-latest
+    needs: [check]
+    if: failure()
+
+    steps:
+      - name: Post failure to Slack
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL: ${{ vars.PM_MONITOR_SLACK_CHANNEL || '#pm-releases' }}
+        run: |
+          curl -s -X POST https://slack.com/api/chat.postMessage \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"channel\": \"$SLACK_CHANNEL\",
+              \"text\": \"⚠️ *pm-version-monitor failed* — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View workflow run>\"
+            }"

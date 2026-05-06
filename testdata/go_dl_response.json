@@ -1,0 +1,5 @@
+[
+  {"version": "go1.25", "stable": true, "files": []},
+  {"version": "go1.25rc1", "stable": false, "files": []},
+  {"version": "go1.24.3", "stable": true, "files": []}
+]

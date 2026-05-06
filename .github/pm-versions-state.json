@@ -1,0 +1,56 @@
+{
+  "pms": {
+    "conan": {
+      "latest_known": "2.28.1",
+      "versions": {}
+    },
+    "go": {
+      "latest_known": "go1.26.2",
+      "versions": {}
+    },
+    "gradle": {
+      "latest_known": "v9.5.0",
+      "versions": {}
+    },
+    "helm": {
+      "latest_known": "v4.1.4",
+      "versions": {}
+    },
+    "maven": {
+      "latest_known": "maven-4.0.0-rc-5",
+      "versions": {}
+    },
+    "npm": {
+      "latest_known": "11.13.0",
+      "versions": {}
+    },
+    "nuget": {
+      "latest_known": "v11.0.100-preview.1.26104.118",
+      "versions": {}
+    },
+    "pip": {
+      "latest_known": "26.1.1",
+      "versions": {}
+    },
+    "pipenv": {
+      "latest_known": "2026.6.1",
+      "versions": {}
+    },
+    "pnpm": {
+      "latest_known": "11.0.5",
+      "versions": {}
+    },
+    "poetry": {
+      "latest_known": "2.4.0",
+      "versions": {}
+    },
+    "uv": {
+      "latest_known": "0.11.10",
+      "versions": {}
+    },
+    "yarn": {
+      "latest_known": "@yarnpkg/cli/4.14.1",
+      "versions": {}
+    }
+  }
+}
