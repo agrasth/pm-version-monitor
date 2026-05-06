@@ -24,6 +24,7 @@ type PackageManager struct {
 	SourceType         string   `yaml:"source_type"`
 	SourceID           string   `yaml:"source_id"`
 	NotifyReleaseTypes []string `yaml:"notify_release_types"`
+	DiscoverRange      string   `yaml:"discover_range"` // date string "YYYY-MM-DD"; if empty, PM is skipped by discover
 	Enabled            bool     `yaml:"enabled"`
 }
 

@@ -17,6 +17,7 @@ package_managers:
     source_type: github_releases
     source_id: apache/maven
     notify_release_types: [milestone, rc, ga]
+    discover_range: "2022-01-01"
     enabled: true
   - name: pip
     source_type: pypi
@@ -67,10 +68,16 @@ func TestLoad(t *testing.T) {
 	if len(maven.NotifyReleaseTypes) != 3 {
 		t.Errorf("NotifyReleaseTypes len = %d, want 3", len(maven.NotifyReleaseTypes))
 	}
+	if maven.DiscoverRange != "2022-01-01" {
+		t.Errorf("DiscoverRange = %q, want 2022-01-01", maven.DiscoverRange)
+	}
 
 	pip := cfg.PackageManagers[1]
 	if pip.Enabled {
 		t.Error("pip Enabled = true, want false")
+	}
+	if pip.DiscoverRange != "" {
+		t.Errorf("DiscoverRange for pip (unset) = %q, want empty", pip.DiscoverRange)
 	}
 
 	// DisplayName not set — should fall back to Name
