@@ -17,10 +17,10 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version-file: tools/pm-version-monitor/go.mod
+          go-version-file: go.mod
 
       - name: Build pm-version-monitor
-        run: go build -o /usr/local/bin/pm-version-monitor ./tools/pm-version-monitor
+        run: go build -o /usr/local/bin/pm-version-monitor .
 
       - name: Run check
         env:

@@ -69,10 +69,15 @@ func (p *PyPISource) FetchReleases(sourceID, sinceVersion string) ([]Release, er
 		if !version.IsNewerThan(ver, sinceVersion) {
 			continue
 		}
+		publishedAt := files[0].UploadTime
+		// PyPI upload_time has no timezone — append Z so RFC3339 parsing works downstream
+		if publishedAt != "" && !strings.HasSuffix(publishedAt, "Z") && !strings.Contains(publishedAt, "+") {
+			publishedAt += "Z"
+		}
 		releases = append(releases, Release{
 			Version:         ver,
 			IsPrerelease:    isPyPIPrerelease(ver),
-			PublishedAt:     files[0].UploadTime,
+			PublishedAt:     publishedAt,
 			ReleaseNotesURL: fmt.Sprintf("https://pypi.org/project/%s/%s/", sourceID, ver),
 		})
 	}
@@ -118,15 +123,24 @@ func (p *PyPISource) FetchAll(sourceID, sinceDate string) ([]Release, error) {
 			continue
 		}
 		if !cutoff.IsZero() {
-			uploadTime, err := time.Parse("2006-01-02T15:04:05", files[0].UploadTime)
+			rawTime := files[0].UploadTime
+			if rawTime != "" && !strings.HasSuffix(rawTime, "Z") && !strings.Contains(rawTime, "+") {
+				rawTime += "Z"
+			}
+			uploadTime, err := time.Parse(time.RFC3339, rawTime)
 			if err == nil && uploadTime.Before(cutoff) {
 				continue
 			}
 		}
+		publishedAt := files[0].UploadTime
+		// PyPI upload_time has no timezone — append Z so RFC3339 parsing works downstream
+		if publishedAt != "" && !strings.HasSuffix(publishedAt, "Z") && !strings.Contains(publishedAt, "+") {
+			publishedAt += "Z"
+		}
 		releases = append(releases, Release{
 			Version:         ver,
 			IsPrerelease:    isPyPIPrerelease(ver),
-			PublishedAt:     files[0].UploadTime,
+			PublishedAt:     publishedAt,
 			ReleaseNotesURL: fmt.Sprintf("https://pypi.org/project/%s/%s/", sourceID, ver),
 		})
 	}
