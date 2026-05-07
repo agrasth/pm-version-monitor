@@ -38,6 +38,16 @@ func main() {
 			os.Exit(1)
 		}
 
+	case "matrix":
+		fs := flag.NewFlagSet("matrix", flag.ExitOnError)
+		outputPath := fs.String("output", "docs/index.html", "output path for the HTML matrix")
+		fs.Parse(os.Args[2:])
+		statePath := envOr("PM_STATE_PATH", defaultStatePath)
+		if err := cmd.RunMatrix(statePath, *outputPath); err != nil {
+			fmt.Fprintf(os.Stderr, "[pm-monitor] ERROR: %v\n", err)
+			os.Exit(1)
+		}
+
 	case "status":
 		statePath := envOr("PM_STATE_PATH", defaultStatePath)
 		if err := cmd.RunStatus(statePath); err != nil {
@@ -52,11 +62,12 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: pm-version-monitor <check|discover|status>")
+	fmt.Fprintln(os.Stderr, "usage: pm-version-monitor <check|discover|matrix|status>")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "commands:")
 	fmt.Fprintln(os.Stderr, "  check    poll all enabled PMs, notify new releases, update state")
 	fmt.Fprintln(os.Stderr, "  discover fetch all historical PM releases into state (bootstrap, run once)")
+	fmt.Fprintln(os.Stderr, "  matrix   generate HTML compatibility matrix from state")
 	fmt.Fprintln(os.Stderr, "  status   print current state table")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "env vars:")
@@ -67,6 +78,9 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintln(os.Stderr, "flags (check only):")
 	fmt.Fprintln(os.Stderr, "  --dry-run        print notifications to stdout, no Slack token needed")
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, "flags (matrix only):")
+	fmt.Fprintln(os.Stderr, "  --output         output path (default: docs/index.html)")
 	os.Exit(1)
 }
 
