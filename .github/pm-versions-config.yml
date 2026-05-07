@@ -7,6 +7,7 @@ package_managers:
     source_type: npm_registry
     source_id: npm
     notify_release_types: [alpha, beta, milestone, rc, ga]
+    discover_range: "2020-01-01"
     enabled: true
 
   - name: yarn
@@ -14,60 +15,70 @@ package_managers:
     source_type: github_releases
     source_id: yarnpkg/berry
     notify_release_types: [beta, rc, ga]
+    discover_range: "2020-01-01"
     enabled: true
 
   - name: pnpm
     source_type: npm_registry
     source_id: pnpm
     notify_release_types: [alpha, beta, milestone, rc, ga]
+    discover_range: "2020-01-01"
     enabled: true
 
   - name: maven
     source_type: github_releases
     source_id: apache/maven
     notify_release_types: [milestone, rc, ga]
+    discover_range: "2018-01-01"
     enabled: true
 
   - name: gradle
     source_type: github_releases
     source_id: gradle/gradle
     notify_release_types: [rc, ga]
+    discover_range: "2019-01-01"
     enabled: true
 
   - name: pip
     source_type: pypi
     source_id: pip
     notify_release_types: [alpha, beta, rc, ga]
+    discover_range: "2020-01-01"
     enabled: true
 
   - name: pipenv
     source_type: pypi
     source_id: pipenv
     notify_release_types: [beta, rc, ga]
+    discover_range: "2022-01-01"
     enabled: true
 
   - name: poetry
     source_type: pypi
     source_id: poetry
     notify_release_types: [beta, rc, ga]
+    discover_range: "2021-01-01"
     enabled: true
 
   - name: uv
     source_type: github_releases
     source_id: astral-sh/uv
     notify_release_types: [rc, ga]
+    discover_range: "2023-01-01"
     enabled: true
 
   - name: conan
     source_type: github_releases
     source_id: conan-io/conan
     notify_release_types: [beta, rc, ga]
+    discover_range: "2020-01-01"
     enabled: true
 
   - name: go
     source_type: go_dl
     source_id: go
     notify_release_types: [rc, ga]
+    discover_range: "2020-01-01"
     enabled: true
 
   - name: nuget
@@ -75,6 +86,7 @@ package_managers:
     source_type: github_releases
     source_id: dotnet/sdk
     notify_release_types: [rc, ga]
+    discover_range: "2021-01-01"
     enabled: true
 
   - name: docker
@@ -82,10 +94,12 @@ package_managers:
     source_type: github_releases
     source_id: docker/cli
     notify_release_types: [rc, ga]
+    discover_range: "2021-01-01"
     enabled: true
 
   - name: helm
     source_type: github_releases
     source_id: helm/helm
     notify_release_types: [alpha, beta, rc, ga]
+    discover_range: "2020-01-01"
     enabled: true
