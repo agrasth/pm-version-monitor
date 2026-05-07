@@ -12,6 +12,9 @@ on:
       slack_thread_ts:
         description: 'Slack thread timestamp for reply (optional)'
         required: false
+      jfcli_version:
+        description: 'jfrog-cli version to test against (e.g. 2.104.0, leave empty for latest)'
+        required: false
   repository_dispatch:
     types: [run-pm-compatibility-test]
 
@@ -26,6 +29,7 @@ jobs:
       PM_NAME:         ${{ github.event.inputs.pm_name    || github.event.client_payload.pm_name }}
       PM_VERSION:      ${{ github.event.inputs.pm_version || github.event.client_payload.pm_version }}
       SLACK_THREAD_TS: ${{ github.event.inputs.slack_thread_ts || github.event.client_payload.slack_thread_ts }}
+      JFCLI_VERSION:   ${{ github.event.inputs.jfcli_version || github.event.client_payload.jfcli_version }}
 
     steps:
       - uses: actions/checkout@v4
@@ -34,8 +38,21 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # ── Install the requested PM version ──────────────────────────────
+      - name: Build pm-version-monitor
+        run: go build -o /usr/local/bin/pm-version-monitor .
 
+      # ── Install the requested jfrog-cli version ───────────────────────
+      - name: Install jfrog-cli (specific version)
+        if: env.JFCLI_VERSION != ''
+        run: |
+          curl -fL "https://releases.jfrog.io/artifactory/jfrog-cli/v2/${{ env.JFCLI_VERSION }}/jfrog-cli_linux_amd64/jf" \
+            -o /usr/local/bin/jf && chmod +x /usr/local/bin/jf
+
+      - name: Install jfrog-cli (latest)
+        if: env.JFCLI_VERSION == ''
+        run: curl -fL https://install-cli.jfrog.io | sh
+
+      # ── Install the requested PM version ──────────────────────────────
       - name: Install PM (PyPI-based)
         if: contains('pip pipenv poetry conan', env.PM_NAME)
         run: pip install "${{ env.PM_NAME }}==${{ env.PM_VERSION }}"
@@ -72,14 +89,22 @@ jobs:
         with:
           version: ${{ env.PM_VERSION }}
 
-      # ── Run existing e2e tests for this PM ─────────────────────────────
+      # ── Checkout jfrog-cli for e2e tests ──────────────────────────────
+      - name: Checkout jfrog-cli
+        uses: actions/checkout@v4
+        with:
+          repository: jfrog/jfrog-cli
+          path: jfrog-cli-src
+          ref: ${{ env.JFCLI_VERSION != '' && format('v{0}', env.JFCLI_VERSION) || 'master' }}
 
+      # ── Run e2e tests ──────────────────────────────────────────────────
       - name: Run e2e tests
         id: run_tests
         continue-on-error: true
         env:
           JFROG_URL:          ${{ secrets.JFROG_TESTS_PLATFORM_URL }}
           JFROG_ACCESS_TOKEN: ${{ secrets.JFROG_TESTS_ACCESS_TOKEN }}
+        working-directory: jfrog-cli-src
         run: |
           case "$PM_NAME" in
             maven)   go test -v -run TestMaven   ./... 2>&1 | tee /tmp/test_output.txt ;;
@@ -99,9 +124,8 @@ jobs:
             *)       echo "Unknown PM: $PM_NAME"; exit 1 ;;
           esac
 
-      # ── Update state and post result to Slack ──────────────────────────
-
-      - name: Update state file
+      # ── Update state, regenerate matrix, commit ───────────────────────
+      - name: Update state and regenerate matrix
         if: always()
         run: |
           STATUS="passed"
@@ -111,50 +135,64 @@ jobs:
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           python3 - <<EOF
-          import json
+          import json, datetime
 
           with open('.github/pm-versions-state.json') as f:
               data = json.load(f)
 
-          pm = "$PM_NAME"
+          pm      = "$PM_NAME"
           version = "$PM_VERSION"
-          status = "$STATUS"
+          status  = "$STATUS"
           run_url = "$RUN_URL"
+          jfcli   = "$JFCLI_VERSION"
 
           if pm in data.get('pms', {}) and version in data['pms'][pm].get('versions', {}):
-              data['pms'][pm]['versions'][version]['test_status'] = status
-              data['pms'][pm]['versions'][version]['run_url'] = run_url
+              entry = data['pms'][pm]['versions'][version]
+              entry['test_status'] = status
+              entry['run_url']     = run_url
+              entry['tested_at']   = datetime.datetime.utcnow().isoformat() + 'Z'
+              if jfcli:
+                  entry['jfcli_version'] = jfcli
 
           with open('.github/pm-versions-state.json', 'w') as f:
               json.dump(data, f, indent=2)
-
-          print(f"Updated state: {pm} {version} -> {status}")
+          print(f"Updated: {pm} {version} -> {status}")
           EOF
 
+          # Regenerate matrix HTML
+          PM_STATE_PATH=.github/pm-versions-state.json \
+          pm-version-monitor matrix --output docs/index.html
+
+      - name: Commit state + matrix
+        if: always()
+        run: |
           git config user.name  "pm-version-monitor[bot]"
           git config user.email "pm-version-monitor[bot]@users.noreply.github.com"
-          git add .github/pm-versions-state.json
-          git diff --cached --quiet || git commit -m "chore(pm-monitor): update test status for $PM_NAME $PM_VERSION [skip ci]"
+          git add .github/pm-versions-state.json docs/index.html
+          git diff --cached --quiet || git commit -m \
+            "chore(matrix): update $PM_NAME $PM_VERSION → ${{ steps.run_tests.outcome }} [skip ci]"
           git push || true
 
+      # ── Post result to Slack ───────────────────────────────────────────
       - name: Post result to Slack
         if: always()
         env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ "${{ steps.run_tests.outcome }}" = "success" ]; then
-            TEXT="✅ *$PM_NAME $PM_VERSION* — all tests passed   <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+            TEXT="$PM_NAME $PM_VERSION — all tests passed   <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
           else
-            TEXT="❌ *$PM_NAME $PM_VERSION* — tests failed   <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+            TEXT="$PM_NAME $PM_VERSION — tests failed   <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
           fi
 
-          PAYLOAD="{\"channel\": \"#pm-releases\", \"text\": \"$TEXT\""
+          PAYLOAD="{\"text\": \"$TEXT\""
           if [ -n "$SLACK_THREAD_TS" ]; then
             PAYLOAD="${PAYLOAD}, \"thread_ts\": \"$SLACK_THREAD_TS\""
           fi
           PAYLOAD="${PAYLOAD}}"
 
-          curl -s -X POST https://slack.com/api/chat.postMessage \
-            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD"
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD"
+          fi
