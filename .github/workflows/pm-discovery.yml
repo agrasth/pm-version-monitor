@@ -1,0 +1,76 @@
+name: PM Version Discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "discover" to confirm bootstrap run (fetches all historical versions)'
+        required: true
+
+jobs:
+  discover:
+    name: Discover historical PM versions
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'discover'
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build pm-version-monitor
+        run: go build -o /usr/local/bin/pm-version-monitor .
+
+      - name: Run discover
+        env:
+          GITHUB_TOKEN:   ${{ secrets.GITHUB_TOKEN }}
+          PM_CONFIG_PATH: .github/pm-versions-config.yml
+          PM_STATE_PATH:  .github/pm-versions-state.json
+        run: pm-version-monitor discover
+
+      - name: Commit updated state
+        run: |
+          git config user.name  "pm-version-monitor[bot]"
+          git config user.email "pm-version-monitor[bot]@users.noreply.github.com"
+          git add .github/pm-versions-state.json
+          if git diff --cached --quiet; then
+            echo "No new versions discovered."
+          else
+            git commit -m "chore(discover): seed historical version state [skip ci]"
+            git push
+          fi
+
+      - name: Queue pending versions for testing (first 10)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'EOF'
+          import json, subprocess
+
+          with open('.github/pm-versions-state.json') as f:
+              data = json.load(f)
+
+          pending = []
+          for pm, pm_state in data.get('pms', {}).items():
+              for version, entry in pm_state.get('versions', {}).items():
+                  if entry.get('test_status') == 'pending':
+                      pending.append({'pm': pm, 'version': version})
+
+          print(f"Queuing first 10 of {len(pending)} pending versions for testing...")
+
+          for item in pending[:10]:
+              cmd = [
+                  'gh', 'workflow', 'run', 'pm-compatibility-test.yml',
+                  '-f', f"pm_name={item['pm']}",
+                  '-f', f"pm_version={item['version']}",
+              ]
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              if result.returncode != 0:
+                  print(f"WARN: {item['pm']} {item['version']}: {result.stderr.strip()}")
+              else:
+                  print(f"Triggered: {item['pm']} {item['version']}")
+          EOF

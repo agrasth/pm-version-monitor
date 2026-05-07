@@ -1,0 +1,73 @@
+name: Post-Release PM Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      jfcli_version:
+        description: 'jfrog-cli version just released (e.g. 2.104.0)'
+        required: true
+      mode:
+        description: 'Which versions to re-test'
+        required: true
+        type: choice
+        options:
+          - failed-only
+          - full
+
+jobs:
+  queue-tests:
+    name: Queue ${{ github.event.inputs.mode }} for jfrog-cli v${{ github.event.inputs.jfcli_version }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select and queue versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<EOF
+          import json, subprocess
+
+          with open('.github/pm-versions-state.json') as f:
+              data = json.load(f)
+
+          mode  = "${{ github.event.inputs.mode }}"
+          jfcli = "${{ github.event.inputs.jfcli_version }}"
+
+          to_test = []
+          for pm, pm_state in data.get('pms', {}).items():
+              for version, entry in pm_state.get('versions', {}).items():
+                  status = entry.get('test_status', '')
+                  if mode == 'full':
+                      to_test.append({'pm': pm, 'version': version})
+                  elif mode == 'failed-only' and status == 'failed':
+                      to_test.append({'pm': pm, 'version': version})
+
+          print(f"Mode: {mode} | jfrog-cli: {jfcli} | Versions to queue: {len(to_test)}")
+
+          for item in to_test:
+              cmd = [
+                  'gh', 'workflow', 'run', 'pm-compatibility-test.yml',
+                  '-f', f"pm_name={item['pm']}",
+                  '-f', f"pm_version={item['version']}",
+                  '-f', f"jfcli_version={jfcli}",
+              ]
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              if result.returncode != 0:
+                  print(f"WARN: {item['pm']} {item['version']}: {result.stderr.strip()}")
+              else:
+                  print(f"Triggered: {item['pm']} {item['version']}")
+          EOF
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -s -X POST "$SLACK_WEBHOOK_URL" \
+              -H "Content-Type: application/json" \
+              -d "{\"text\": \"Post-release validation started for jfrog-cli v${{ github.event.inputs.jfcli_version }} (mode: ${{ github.event.inputs.mode }}) — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"}"
+          fi
