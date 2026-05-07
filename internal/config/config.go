@@ -14,8 +14,9 @@ type Config struct {
 }
 
 type Settings struct {
-	AutoTestAfterHours int    `yaml:"auto_test_after_hours"`
-	SlackChannel       string `yaml:"slack_channel"`
+	AutoTestAfterHours  int    `yaml:"auto_test_after_hours"`
+	SlackChannel        string `yaml:"slack_channel"`
+	DiscoverMaxVersions int    `yaml:"discover_max_versions"` // max new versions to queue per PM per discover run; 0 = unlimited
 }
 
 type PackageManager struct {

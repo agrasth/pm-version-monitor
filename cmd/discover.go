@@ -47,7 +47,13 @@ func RunDiscover(configPath, statePath string) error {
 			continue
 		}
 
+		limit := cfg.Settings.DiscoverMaxVersions
+		pmAdded := 0
 		for _, rel := range releases {
+			if limit > 0 && pmAdded >= limit {
+				log.Printf("[pm-monitor] INFO: %s reached discover_max_versions limit (%d), stopping", pm.Name, limit)
+				break
+			}
 			if state.HasVersion(s, pm.Name, rel.Version) {
 				continue
 			}
@@ -58,6 +64,7 @@ func RunDiscover(configPath, statePath string) error {
 			}
 			state.AddVersion(s, pm.Name, rel.Version, rt, detectedAt)
 			added++
+			pmAdded++
 			log.Printf("[pm-monitor] INFO: queued %s %s (%s)", pm.Name, rel.Version, rt)
 		}
 	}
