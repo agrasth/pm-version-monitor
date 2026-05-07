@@ -29,7 +29,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<EOF
-          import json, subprocess
+          import json, subprocess, os
 
           with open('.github/pm-versions-state.json') as f:
               data = json.load(f)
@@ -48,12 +48,15 @@ jobs:
 
           print(f"Mode: {mode} | jfrog-cli: {jfcli} | Versions to queue: {len(to_test)}")
 
+          repo = os.environ['GITHUB_REPOSITORY']
           for item in to_test:
               cmd = [
-                  'gh', 'workflow', 'run', 'pm-compatibility-test.yml',
-                  '-f', f"pm_name={item['pm']}",
-                  '-f', f"pm_version={item['version']}",
-                  '-f', f"jfcli_version={jfcli}",
+                  'gh', 'api', f'repos/{repo}/dispatches',
+                  '-X', 'POST',
+                  '-f', 'event_type=run-pm-compatibility-test',
+                  '-f', f"client_payload[pm_name]={item['pm']}",
+                  '-f', f"client_payload[pm_version]={item['version']}",
+                  '-f', f"client_payload[jfcli_version]={jfcli}",
               ]
               result = subprocess.run(cmd, capture_output=True, text=True)
               if result.returncode != 0:
